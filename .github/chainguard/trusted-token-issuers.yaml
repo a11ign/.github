@@ -1,0 +1,12 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/octo-sts/app/refs/heads/main/pkg/octosts/octosts.OrgTrustedIssuers.json
+
+# Octo STS trusts ONLY the GitHub Actions OIDC issuer for this organization (a11ign/a11ign#4193).
+# DELETING THIS FILE FAILS OPEN: with no file Octo STS permits ALL issuers (octo-sts/app README, "When the lookup
+# fails"), so a11ign/a11ign pins its existence in packages/guards/src/octo-sts-trusted-issuers.test.ts.
+# Syntax: octo-sts/app v0.11.2, "Organization Trusted Token Issuers".
+
+mode: enforce
+
+# Matched exactly: a trailing slash makes a different issuer.
+issuers:
+  - https://token.actions.githubusercontent.com
