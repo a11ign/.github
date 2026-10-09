@@ -1,0 +1,32 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/octo-sts/app/refs/heads/main/pkg/octosts/octosts.OrgTrustPolicy.json
+#
+# a11ign/a11ign#4330 (ceo's ruling on #4195): what `nightly.yml` mints a `metadata: read` installation token with, to read the `main`
+# rules of the nine code repositories `mainRulesetBinds` loops over. Octo STS v0.11.2 (`octosts.OrgTrustPolicy.json`).
+#
+# AN ORGANISATION policy, scope `a11ign`, identity `nightly-ruleset-read-org`. `repositories:` below is the ONLY thing narrowing it: the
+# schema says "If not provided, all repositories available to the GitHub App within the organization are included", which would add
+# `corpus-backups` and `auth-capture-check`. Never delete or empty it. The list is `code[].repo` of a11ign/a11ign's
+# `.agent-org/project.json`, names only; a11ign/a11ign pins the two equal (the row's Acceptance) and a tenth code repository turns it red.
+#
+# `metadata: read` and nothing else, no write of any kind. Bound as `nightly-board-read` is (see its header in a11ign/a11ign): the
+# immutable-id subject, and `job_workflow_ref` and `ref` pinned to `main`, so a branch dispatch, a `refs/pull/` ref or another workflow
+# file cannot mint it.
+#
+# A token minted here answers `current_user_can_bypass` FOR THE APP ALONE: it does not say nobody else is exempt.
+issuer: https://token.actions.githubusercontent.com
+subject: repo:a11ign@320310787/a11ign@1280353940:ref:refs/heads/main
+claim_pattern:
+  job_workflow_ref: a11ign/a11ign/\.github/workflows/nightly\.yml@refs/heads/main
+  ref: refs/heads/main
+permissions:
+  metadata: read
+repositories:
+  - a11ign
+  - agent-org
+  - screenreader-worker
+  - documents
+  - screenreader-fleet
+  - control
+  - lab
+  - toolchain
+  - .github
