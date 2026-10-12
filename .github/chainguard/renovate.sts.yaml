@@ -11,11 +11,14 @@
 # and sets `enabled: true` (`default.json` here, and `RENOVATE_REQUIRE_CONFIG=required` in the workflow). Widening this list moves no
 # repository; a repository's own file does.
 #
-# WHAT IT HOLDS: `contents: write` (the update branch), `pull_requests: write` (the pull request and its automerge request) and
-# `issues: read` (the dependency dashboard and labels are issue reads), and nothing else. NO `workflows: write`: a bump of an
-# `uses:` pin edits a file under `.github/workflows/`, which GitHub refuses to a token without it, so the github-actions manager's row
-# decides that grant (it is the permission `consumer-gate-pin-write.sts.yaml` documents as safe only for a job that runs no repository
-# code, and this job's container does). The App installation behind Octo STS must hold whatever is named here.
+# WHAT IT HOLDS: `contents: write` (the update branch), `pull_requests: write` (the pull request, its labels and its automerge request) and
+# `issues: read` (as the row specifies), and nothing else. NO `issues: write`: Renovate's Dependency Dashboard and its config-error and
+# config-warning issues are issue WRITES, so `default.json` turns them off (`dependencyDashboard: false`, `suppressNotifications`), and a
+# preset that turned one back on would be refused by GitHub rather than silently allowed. Widening this is a decision for the row that wants
+# a dashboard. NO `workflows: write` either: a bump of an `uses:` pin edits a file under `.github/workflows/`, which GitHub refuses to a
+# token without it, so the github-actions manager's row decides that grant (it is the permission `consumer-gate-pin-write.sts.yaml`
+# documents as safe only for a job that runs no repository code, and this job's container does). The App installation behind Octo STS must
+# hold whatever is named here.
 #
 # WHAT BINDS IT TO `main`: `subject` is the EXACT `sub` of a run on the `main` ref of THIS repository, which both of the workflow's
 # triggers (`schedule` and `workflow_dispatch` on `main`) present; `sub` carries IMMUTABLE ids (`repo:<owner>@<id>/<repo>@<id>`), so a
