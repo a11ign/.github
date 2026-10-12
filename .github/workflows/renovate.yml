@@ -1,0 +1,83 @@
+name: renovate
+
+# SELF-HOSTED RENOVATE, ON A SCHEDULE, WITH A TOKEN FROM OCTO STS AND NO STORED SECRET (a11ign/a11ign#5221, part of #5153).
+#
+# This file is the ENGINE. It declares no manager and enrols no repository: what a repository gets is its own `renovate.json`
+# extending the shared preset (`default.json` in this repository, `local>a11ign/.github`), which is `enabled: false` until the
+# repository says otherwise. `RENOVATE_REQUIRE_CONFIG=required` means a repository with no such file is skipped, never onboarded, so a
+# run today touches nothing.
+#
+# ## The token
+#
+# `octo-sts/action` mints it under the ORGANISATION policy `.github/chainguard/renovate.sts.yaml`, which binds it to this workflow's
+# `job_workflow_ref` at `@refs/heads/main`. A branch that edits this file cannot mint. There is NO fallback to `GITHUB_TOKEN`: that token
+# cannot reach another repository, and a failed mint should fail the job, not run Renovate against the wrong identity.
+#
+# `id-token: write` puts the OIDC request URL in the environment of every step of this job. The Renovate step runs in a container and
+# `renovatebot/github-action` forwards only what its `env-regex` matches (RENOVATE_*, LOG_LEVEL and a few more), so the request URL and its
+# bearer token do not reach it. Do not widen `env-regex` or `additional-env-list` here without reading that sentence again.
+#
+# ## Dry run
+#
+# A `workflow_dispatch` defaults to `dry-run: full`: it extracts, looks up and logs what it WOULD open, and writes nothing. The
+# schedule never dry-runs. `repository` narrows a dispatch to one `owner/name`.
+#
+# ## Health signals (read by the sibling measure row, nothing here acts on them)
+#
+# Renovate pull requests open more than an hour, and a red `main` after a bump.
+
+on:
+  schedule:
+    # Hourly, off the hour: the top of the hour is where every scheduled workflow on GitHub queues.
+    - cron: '23 * * * *'
+  workflow_dispatch:
+    inputs:
+      dry-run:
+        description: What a run may write. `full` extracts, looks up and logs, and opens nothing; `none` is a real run.
+        type: choice
+        options:
+          - full
+          - lookup
+          - extract
+          - none
+        default: full
+      repository:
+        description: One `owner/name` to run against. Empty means every repository the token reaches that has a `renovate.json`.
+        type: string
+        default: ''
+
+permissions: {}
+
+# One run at a time: two would each see the same open pull request count and both open the next, past `prConcurrentLimit`.
+concurrency:
+  group: renovate
+  cancel-in-progress: false
+
+jobs:
+  renovate:
+    # A fork of this repository has no Octo STS policy and no business running this.
+    if: github.repository == 'a11ign/.github'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Mint a token for the organisation, for this workflow as it is on main (no fallback to GITHUB_TOKEN)
+        id: octo-sts
+        uses: octo-sts/action@f603d3be9d8dd9871a265776e625a27b00effe05 # v1.1.1
+        with:
+          scope: a11ign
+          identity: renovate
+      - name: Run Renovate
+        uses: renovatebot/github-action@f0f41e5f2e706165f6814b1d0f0d0e319de7d1d9 # v46.3.8
+        with:
+          token: ${{ steps.octo-sts.outputs.token }}
+        env:
+          RENOVATE_AUTODISCOVER: 'true'
+          RENOVATE_AUTODISCOVER_FILTER: '["${{ inputs.repository || ''a11ign/*'' }}"]'
+          RENOVATE_ONBOARDING: 'false'
+          RENOVATE_REQUIRE_CONFIG: required
+          # `null` on a schedule is a real run; a dispatch carries its own choice, where `none` is the same thing.
+          RENOVATE_DRY_RUN: ${{ (github.event_name == 'workflow_dispatch' && inputs.dry-run != 'none') && inputs.dry-run || 'null' }}
+          LOG_LEVEL: info

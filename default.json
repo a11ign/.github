@@ -1,0 +1,29 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "description": "The shared Renovate preset every a11ign repository extends (local>a11ign/.github; a11ign/a11ign#5221, #5153). OFF until a repository's own renovate.json sets enabled: true. Titles read `deps: bump <package> from <x> to <y>`, the handle the gate recognises a dependency pull request by. No dashboard or config-error issues (the token holds issues: read only). One pull request open at a time; automerge hands the pull request to GitHub's own auto-merge, so the approving review and the merge queue `main` requires still decide. A major bump, and any 0.x bump (below 1.0 a minor is the breaking one), is never automerged.",
+  "enabled": false,
+  "dependencyDashboard": false,
+  "suppressNotifications": ["configErrorIssue", "prIgnoreNotification"],
+  "semanticCommits": "disabled",
+  "commitMessagePrefix": "deps:",
+  "commitMessageAction": "bump",
+  "commitMessageTopic": "{{depName}}",
+  "commitMessageExtra": "from {{currentVersion}} to {{newVersion}}",
+  "prFooter": "Opened by the shared Renovate preset in a11ign/.github (a11ign/a11ign#5153). To stop these, set `\"enabled\": false` in this repository's renovate.json.",
+  "prConcurrentLimit": 1,
+  "automerge": true,
+  "automergeType": "pr",
+  "platformAutomerge": true,
+  "packageRules": [
+    {
+      "description": "A major bump is a person's decision",
+      "matchUpdateTypes": ["major"],
+      "automerge": false
+    },
+    {
+      "description": "Below 1.0 a minor bump is the breaking one",
+      "matchCurrentVersion": "/^0\\./",
+      "automerge": false
+    }
+  ]
+}
