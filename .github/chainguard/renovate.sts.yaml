@@ -1,0 +1,44 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/octo-sts/app/refs/heads/main/pkg/octosts/octosts.OrgTrustPolicy.json
+#
+# THE TOKEN `renovate.yml` RUNS SELF-HOSTED RENOVATE WITH (a11ign/a11ign#5221, part of #5153). Octo STS v0.11.2 (`octosts.OrgTrustPolicy.json`).
+#
+# AN ORGANISATION policy, scope `a11ign`, identity `renovate`: the repository policy form reaches only the repository it sits in, and
+# Renovate has to open pull requests in the others. `repositories:` below is the ONLY thing narrowing it: the schema says "If not
+# provided, all repositories available to the GitHub App within the organization are included". Never delete or empty it. It is the
+# list `nightly-ruleset-read-org.sts.yaml` carries (`code[].repo` of a11ign/a11ign's `.agent-org/project.json`, names only).
+#
+# A REPOSITORY IN THAT LIST IS REACHABLE, NOT ENROLLED. Renovate touches one only when its own `renovate.json` extends `local>a11ign/.github`
+# and sets `enabled: true` (`default.json` here, and `RENOVATE_REQUIRE_CONFIG=required` in the workflow). Widening this list moves no
+# repository; a repository's own file does.
+#
+# WHAT IT HOLDS: `contents: write` (the update branch), `pull_requests: write` (the pull request and its automerge request) and
+# `issues: read` (the dependency dashboard and labels are issue reads), and nothing else. NO `workflows: write`: a bump of an
+# `uses:` pin edits a file under `.github/workflows/`, which GitHub refuses to a token without it, so the github-actions manager's row
+# decides that grant (it is the permission `consumer-gate-pin-write.sts.yaml` documents as safe only for a job that runs no repository
+# code, and this job's container does). The App installation behind Octo STS must hold whatever is named here.
+#
+# WHAT BINDS IT TO `main`: `subject` is the EXACT `sub` of a run on the `main` ref of THIS repository, which both of the workflow's
+# triggers (`schedule` and `workflow_dispatch` on `main`) present; `sub` carries IMMUTABLE ids (`repo:<owner>@<id>/<repo>@<id>`), so a
+# subject written with names never matches (a11ign/a11ign#4191). `job_workflow_ref` pinned to `@refs/heads/main` closes the other door:
+# a run from a branch names that branch in both claims and is refused. Patterns are matched against the WHOLE claim, so none is anchored.
+# No `pull_request*` event is named in `event_name`.
+issuer: https://token.actions.githubusercontent.com
+subject: repo:a11ign@320310787/.github@1410838089:ref:refs/heads/main
+claim_pattern:
+  job_workflow_ref: a11ign/\.github/\.github/workflows/renovate\.yml@refs/heads/main
+  ref: refs/heads/main
+  event_name: schedule|workflow_dispatch
+permissions:
+  contents: write
+  pull_requests: write
+  issues: read
+repositories:
+  - a11ign
+  - agent-org
+  - screenreader-worker
+  - documents
+  - screenreader-fleet
+  - control
+  - lab
+  - toolchain
+  - .github
