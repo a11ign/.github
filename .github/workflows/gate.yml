@@ -1,0 +1,54 @@
+name: gate
+
+# THE CHECK THIS REPOSITORY'S PULL REQUESTS ARE HELD TO (a11ign/a11ign#5422).
+#
+# `docs/code-repository-protection.json` in a11ign/a11ign names `gate` as this repository's required check, and until this file
+# existed no workflow ran on `pull_request`, so a pull request here had an empty `statusCheckRollup`: neither red nor green, never a
+# settled head, and the gate offers a reviewer only a settled green one. `main` requires one approving review, so such a pull
+# request could not merge (a11ign/.github#4).
+#
+# ## What it checks
+#
+# Every workflow file the pull request adds or changes, with `@action-validator/cli`: the same check a change to
+# `.github/workflows/` is held to in its own Acceptance. A pull request that touches no workflow file runs the job and passes: the job's
+# first duty is to EXIST and be green, so that a settled head exists.
+#
+# ## Why the filter is inside the job
+#
+# A `paths:` filter on the trigger would skip the whole workflow for a pull request that touches no workflow file, and a skipped
+# workflow reports no `gate` at all, which is the defect this file closes.
+#
+# `pull_request`, never `pull_request_target`: the job reads the pull request's own files and holds no secret and no write scope.
+
+on:
+  pull_request:
+    types: [opened, reopened, synchronize]
+
+permissions: {}
+
+jobs:
+  gate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      # The checkout is the merge of the pull request into its base. Depth 2 reaches both parents of that merge commit, so
+      # `HEAD^1` is the base and the diff against it is exactly what the pull request changes.
+      - name: Check out the merge of the pull request into its base
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          fetch-depth: 2
+          persist-credentials: false
+
+      - name: Validate every workflow file the pull request changes
+        run: |
+          set -euo pipefail
+          # `d` drops deleted files: there is nothing left to validate.
+          mapfile -t changed < <(git diff --name-only --diff-filter=d HEAD^1 HEAD -- '.github/workflows/*.yml' '.github/workflows/*.yaml')
+          if [ "${#changed[@]}" -eq 0 ]; then
+            echo "No workflow file changed: nothing to validate."
+            exit 0
+          fi
+          printf 'Validating %s\n' "${changed[@]}"
+          npx --yes @action-validator/cli@0.6.0 "${changed[@]}"
