@@ -50,5 +50,11 @@ jobs:
             echo "No workflow file changed: nothing to validate."
             exit 0
           fi
-          printf 'Validating %s\n' "${changed[@]}"
-          npx --yes @action-validator/cli@0.6.0 "${changed[@]}"
+          # The CLI takes ONE path (two exit with its usage text), so each file gets its own run. Every file is validated before the
+          # job fails, so a pull request with two broken workflows is told about both.
+          failed=0
+          for file in "${changed[@]}"; do
+            echo "Validating ${file}"
+            npx --yes @action-validator/cli@0.6.0 "${file}" || failed=1
+          done
+          exit "${failed}"
