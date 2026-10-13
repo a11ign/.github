@@ -45,6 +45,13 @@ on:
         description: One `owner/name` to run against. Empty means every repository the token reaches that has a `renovate.json`.
         type: string
         default: ''
+      log-level:
+        description: Renovate's LOG_LEVEL. `info` is silent about WHY a branch was not opened; `debug` names the step that skipped it (a11ign/a11ign#5409). The schedule always runs `info`.
+        type: choice
+        options:
+          - info
+          - debug
+        default: info
 
 permissions: {}
 
@@ -80,4 +87,4 @@ jobs:
           RENOVATE_REQUIRE_CONFIG: required
           # `null` on a schedule is a real run; a dispatch carries its own choice, where `none` is the same thing.
           RENOVATE_DRY_RUN: ${{ (github.event_name == 'workflow_dispatch' && inputs.dry-run != 'none') && inputs.dry-run || 'null' }}
-          LOG_LEVEL: info
+          LOG_LEVEL: ${{ inputs.log-level || 'info' }}
