@@ -2,6 +2,7 @@
 # Behaviour tests for the merge flow (A11-274): each case runs a workflow step's `run:` block AS IT IS WRITTEN in the YAML, so a broken
 # `gh api` call, `jq` filter or shell test fails here, where a grep of the file's text would still pass.
 #
+#   - `auto-arm.yml`'s `relay` step: it passes while `main` has no copy of the file that takes a `pr`, and fails on any other refusal.
 #   - `auto-arm.yml`'s `flow` step, in both jobs that arm: it may say `ready=true` only when `main`'s rules hold a merge queue, an approving
 #     review and the required `gate`. On any other `main` an arm is an immediate merge, so the step must stay closed. `gh` is a stub that
 #     prints a fixture of `GET repos/<repo>/rules/branches/main`, so nothing here reaches GitHub.
@@ -42,7 +43,13 @@ PY
 mkdir -p "$WORK/bin"
 cat > "$WORK/bin/gh" <<'STUB'
 #!/usr/bin/env bash
-# A stand-in for `gh`: answers exactly the one read the guard makes, from $RULES_FIXTURE, and fails on anything else.
+# A stand-in for `gh`. It answers exactly two calls and fails on anything else: the guard's read of `main`'s rules, from $RULES_FIXTURE,
+# and `relay`'s dispatch to `main`'s copy of auto-arm.yml, which succeeds when $DISPATCH_ANSWER is empty and otherwise fails printing it.
+if [ "$1" = workflow ]; then
+  [ "$*" = "workflow run auto-arm.yml --repo ${REPOSITORY} --ref main -f pr=${PULL_REQUEST}" ] || { echo "unexpected gh call: $*" >&2; exit 2; }
+  [ -z "${DISPATCH_ANSWER:-}" ] || { echo "$DISPATCH_ANSWER" >&2; exit 1; }
+  exit 0
+fi
 [ "${GH_FAIL:-}" = 1 ] && { echo "gh: HTTP 502" >&2; exit 1; }
 [ "$#" -eq 2 ] && [ "$1" = api ] && [ "$2" = "repos/${GH_REPO}/rules/branches/main" ] || { echo "unexpected gh call: $*" >&2; exit 2; }
 cat "$RULES_FIXTURE"
@@ -97,6 +104,32 @@ for n in $(seq 1 "$count"); do
   run_flow "$WORK/flow.$n" "$WORK/rules.json" 1
   [ "$flow_rc" != 0 ] && [ -z "$flow_output" ] && pass "flow step $n fails closed when the rules cannot be read" \
     || fail "flow step $n should fail closed when the rules cannot be read (exit $flow_rc, output '$flow_output')"
+done
+
+# ---- auto-arm.yml: `relay` -----------------------------------------------------------------------------------------------------
+
+# `relay` hands an approved pull request to `main`'s copy of auto-arm.yml. While `main` has no copy that takes a `pr` (none at all, before
+# this file lands, or one with no `pr` input), there is nothing to hand it to: that is not the pull request's failure, so the job passes
+# with a notice. Any other refusal stays red.
+count=$(extract_runs "$ROOT/.github/workflows/auto-arm.yml" relay name "Hand the approved pull request to \`main\`'s copy of this workflow (#4969)" "$WORK/relay")
+if [ "$count" = 1 ]; then pass "auto-arm.yml's relay job has its one step"; else fail "auto-arm.yml: expected 1 relay step, found $count"; fi
+
+# name | what GitHub answers the dispatch ("" is success) | the exit relay must end with
+relay_cases=(
+  "main's copy took the dispatch||0"
+  "main has no copy of auto-arm.yml yet|could not create workflow dispatch event: HTTP 422: Workflow does not have 'workflow_dispatch' trigger (https://api.github.com/repos/a11ign/example/actions/workflows/1/dispatches)|0"
+  "main's copy declares no pr input yet|could not create workflow dispatch event: HTTP 422: Unexpected inputs provided: [\"pr\"]|0"
+  "any other refusal|could not create workflow dispatch event: HTTP 403: Resource not accessible by integration|nonzero"
+)
+for case in "${relay_cases[@]}"; do
+  IFS='|' read -r name answer want <<<"$case"
+  PATH="$WORK/bin:$PATH" REPOSITORY=a11ign/example PULL_REQUEST=7 DISPATCH_ANSWER="$answer" bash -e "$WORK/relay.1" > "$WORK/relay-stdout" 2>&1
+  rc=$?
+  if [ "$want" = 0 ]; then
+    [ "$rc" = 0 ] && pass "relay passes when $name" || fail "relay should pass when $name (exit $rc: $(tail -1 "$WORK/relay-stdout"))"
+  else
+    [ "$rc" != 0 ] && pass "relay fails on $name" || fail "relay should fail on $name (exit 0)"
+  fi
 done
 
 # ---- gate.yml: the validate step --------------------------------------------------------------------------------------------------

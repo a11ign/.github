@@ -5,8 +5,9 @@
 # early costs nothing and removes "a session has to notice" as a step in a pull request's life (A11-274: this repository had no merge flow,
 # so its pull requests waited for a person as a11ign.github.io#3 did; A11-237 had found the same in announcement-emulator#7 and #8).
 #
-# This is a copy of a11ign/announcement-emulator's `auto-arm.yml` (A11-237), with one step added to each job (see A11-274 below). That file is a
-# deliberately SMALL copy of a11ign/documents' `auto-arm.yml`, itself a copy of a11ign/a11ign's, not a port. a11ign/a11ign's runs
+# This is a copy of a11ign/announcement-emulator's `auto-arm.yml` (A11-237), with one step added to each job that arms and one more
+# refusal `relay` lets pass (both marked A11-274 below). That file is a deliberately SMALL copy of a11ign/documents' `auto-arm.yml`, itself a copy
+# of a11ign/a11ign's, not a port. a11ign/a11ign's runs
 # `agent-org arm-pr`, which reads `.agent-org/project.json` and `.agent-org/roles/sessions.json` from the checkout it runs in; this repository
 # declares no org project. What the tool decides that matters here is one rule, and it is stated below: a `hold:` label is a hold.
 # This repository has no cross-repo CI leg, so lab's refusal to arm a pull request whose cross-repo check has not run is not copied.
@@ -152,10 +153,12 @@ jobs:
           REPOSITORY: ${{ github.repository }}
         run: |
           # `main` declares no `pr` input until this change has landed, and GitHub then answers 422 "Unexpected inputs provided": there is
-          # nothing to hand the number to yet, which is not this pull request's failure. Any OTHER refusal stays red.
+          # nothing to hand the number to yet, which is not this pull request's failure. A repository whose `main` has no copy of this file
+          # at all, the pull request that adds it (A11-274: a11ign.github.io#4), is the same case, and GitHub answers 422 "Workflow does not
+          # have 'workflow_dispatch' trigger". Any OTHER refusal stays red.
           if ! out=$(gh workflow run auto-arm.yml --repo "$REPOSITORY" --ref main -f pr="$PULL_REQUEST" 2>&1); then
             case "$out" in
-              *"Unexpected inputs provided"*) echo "::notice::main's copy of auto-arm.yml declares no pr input yet, so there is nothing to hand #${PULL_REQUEST} to"; exit 0 ;;
+              *"Unexpected inputs provided"*|*"does not have 'workflow_dispatch' trigger"*) echo "::notice::main has no copy of auto-arm.yml that takes a pr yet, so there is nothing to hand #${PULL_REQUEST} to"; exit 0 ;;
             esac
             echo "$out" >&2
             exit 1

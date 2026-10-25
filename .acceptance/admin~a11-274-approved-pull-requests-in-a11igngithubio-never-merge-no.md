@@ -8,8 +8,8 @@ npx --yes @action-validator/cli@0.6.0 .github/workflows/gate.yml
 npx --yes @action-validator/cli@0.6.0 .github/workflows/auto-arm.yml
 # the ruleset is byte-identical to announcement-emulator's
 cmp .github/rulesets/merge-queue-main.json <(gh api repos/a11ign/announcement-emulator/contents/.github/rulesets/merge-queue-main.json --jq .content | base64 -d)
-# auto-arm.yml is announcement-emulator's, line for line, once comments and the A11-274 guard (one `flow` step per job, and the `if:` it sets) are set aside
-diff <(gh api repos/a11ign/announcement-emulator/contents/.github/workflows/auto-arm.yml --jq .content | base64 -d | grep -v '^ *#') <(grep -v '^ *#' .github/workflows/auto-arm.yml | sed "/- name: Read whether main has the merge flow/,/^          fi\$/d; /^        if: steps.flow.outputs.ready == 'true'\$/d")
+# auto-arm.yml is announcement-emulator's, line for line, once comments, the A11-274 guard (one `flow` step per arming job, and the `if:` it sets) and relay's one tolerated-refusal line are set aside (the merge-flow test runs all three)
+diff <(gh api repos/a11ign/announcement-emulator/contents/.github/workflows/auto-arm.yml --jq .content | base64 -d | grep -v '^ *#' | grep -v 'Unexpected inputs provided') <(grep -v '^ *#' .github/workflows/auto-arm.yml | grep -v 'Unexpected inputs provided' | sed "/- name: Read whether main has the merge flow/,/^          fi\$/d; /^        if: steps.flow.outputs.ready == 'true'\$/d")
 # the guard is in both jobs, and each arming step waits on it
 grep -c '^        id: flow$' .github/workflows/auto-arm.yml | grep -qx 2
 grep -c "^        if: steps.flow.outputs.ready == 'true'$" .github/workflows/auto-arm.yml | grep -qx 2
@@ -17,7 +17,7 @@ grep -c "^        if: steps.flow.outputs.ready == 'true'$" .github/workflows/aut
 grep -qxF "subject_pattern: repo:a11ign@320310787/\.github@$(gh api repos/a11ign/.github --jq .id):(pull_request|ref:refs/heads/main)" .github/chainguard/auto-arm.sts.yaml
 grep -qxF '  job_workflow_ref: a11ign/\.github/\.github/workflows/auto-arm\.yml@refs/heads/main' .github/chainguard/auto-arm.sts.yaml
 diff <(sed -n '/^repositories:/,$p' .github/chainguard/auto-arm.sts.yaml) <(printf 'repositories:\n  - .github\n')
-# the merge flow's steps behave as written: the guard opens only on a main with the whole flow and fails closed; the validate step checks every workflow a pull request or a queue entry adds or edits, and fails on a diff it cannot take
+# the merge flow's steps behave as written: relay passes only while main has no copy that takes a pr; the guard opens only on a main with the whole flow and fails closed; the validate step checks every workflow a pull request or a queue entry adds or edits, and fails on a diff it cannot take
 bash .github/tests/merge-flow.test.sh
 # gate runs in the merge queue, against the entry's base
 grep -qx '  merge_group:' .github/workflows/gate.yml
