@@ -1,0 +1,39 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/octo-sts/app/refs/heads/main/pkg/octosts/octosts.OrgTrustPolicy.json
+#
+# Trust policy for `.github/workflows/auto-arm.yml`'s `arm` and `arm-approved` jobs IN THIS REPOSITORY (A11-274), Octo STS v0.11.2 syntax.
+# COPIED from a11ign/announcement-emulator's (A11-237), itself the shape of a11ign/a11ign's (#4198, which carries the reasoning and the
+# measurements, #4191), with this repository's name, id and workflow path, and the one difference below. Every pattern is matched against the
+# WHOLE claim, so none is anchored here.
+#
+# WHY `repositories:` IS HERE, UNLIKE EVERY OTHER REPOSITORY'S COPY: this repository is the organisation's policy repository, and Octo STS
+# reads EVERY policy in it as an organisation policy, even one asked for with the repository scope `a11ign/.github` (`lookupInstallAndTrustPolicy`
+# in `pkg/octosts/octosts.go`, v0.11.2: "If the repo is the org policy repo, then parse with an org policy even if the repo was specified
+# explicitly"). An organisation policy with no `repositories:` reaches every repository the app is installed on when it is asked for with
+# the scope `a11ign`, and a11ign/a11ign's `octo-sts-policies.test.ts` refuses any policy here that lacks one. So the list names this
+# repository alone, and the token reaches `.github` and nothing else, whichever scope asks.
+#
+# WHAT IT HOLDS: pull-request write (enable auto-merge), contents write (the merge itself) and workflows write (see below), on THIS repository
+# only. Nothing else.
+#
+# WHY `workflows`: GitHub refuses `enablePullRequestAutoMerge` to an app without `workflows` on a pull request that changes a file under
+# `.github/workflows/` ("refusing to allow a GitHub App to create or update workflow `.github/workflows/ci.yml` without `workflows` permission":
+# a11ign/lab#150, and lab#148 in auto-arm run 40092564867). Approved workflow changes merge like any other, with no person, by the chairman's
+# decision on 2026-10-24 (A11-203). The `main` binding below is what limits this write to `main`'s own `auto-arm.yml`.
+#
+# WHAT BINDS IT TO `main`: `pull_request` runs the workflow as it is on the BRANCH's merge ref and presents the same `sub` as
+# `pull_request_target`, so `sub` alone cannot tell a branch's edited copy from `main`'s. `job_workflow_ref` pinned to `@refs/heads/main`
+# can, with `event_name` naming the three triggers `auto-arm.yml` runs on. A `pull_request` run, a dispatch on another branch and every
+# other workflow are refused.
+#
+# `sub` carries IMMUTABLE ids (`repo:<owner>@<id>/<repo>@<id>`), so `repo:a11ign/.github:...` never matches.
+issuer: https://token.actions.githubusercontent.com
+subject_pattern: repo:a11ign@320310787/\.github@1410838089:(pull_request|ref:refs/heads/main)
+claim_pattern:
+  job_workflow_ref: a11ign/\.github/\.github/workflows/auto-arm\.yml@refs/heads/main
+  event_name: pull_request_target|push|workflow_dispatch
+permissions:
+  pull_requests: write
+  contents: write
+  workflows: write
+repositories:
+  - .github

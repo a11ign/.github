@@ -19,10 +19,18 @@ name: gate
 # workflow reports no `gate` at all, which is the defect this file closes.
 #
 # `pull_request`, never `pull_request_target`: the job reads the pull request's own files and holds no secret and no write scope.
+#
+# ## The merge queue (A11-274)
+#
+# `merge-queue-main` (`.github/rulesets/merge-queue-main.json`) requires `gate` and builds every pull request in the merge queue before it
+# merges, so `gate` also runs on `merge_group`: a required check that never runs on a queue entry blocks the queue for ever. A queue entry
+# has no pull request diff, so it validates the workflow files changed between the entry's base (`merge_group.base_sha`, the `main` it
+# builds on) and its head, which is every pull request the entry carries.
 
 on:
   pull_request:
     types: [opened, reopened, synchronize]
+  merge_group:
 
 permissions: {}
 
@@ -33,19 +41,23 @@ jobs:
     permissions:
       contents: read
     steps:
-      # The checkout is the merge of the pull request into its base. Depth 2 reaches both parents of that merge commit, so
-      # `HEAD^1` is the base and the diff against it is exactly what the pull request changes.
-      - name: Check out the merge of the pull request into its base
+      # On a pull request the checkout is the merge of the pull request into its base, so `HEAD^1` is the base and the diff against
+      # it is exactly what the pull request changes. On a queue entry it is the entry's head, and the base is `merge_group.base_sha`.
+      # The whole history, because a queue entry carrying several pull requests is more than one commit above its base.
+      - name: Check out the merge of the pull request into its base, or the queue entry's head
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
         with:
-          fetch-depth: 2
+          fetch-depth: 0
           persist-credentials: false
 
-      - name: Validate every workflow file the pull request changes
+      - name: Validate every workflow file the pull request, or the queue entry, changes
+        env:
+          QUEUE_BASE: ${{ github.event.merge_group.base_sha }}
         run: |
           set -euo pipefail
+          base="${QUEUE_BASE:-HEAD^1}"
           # `d` drops deleted files: there is nothing left to validate.
-          mapfile -t changed < <(git diff --name-only --diff-filter=d HEAD^1 HEAD -- '.github/workflows/*.yml' '.github/workflows/*.yaml')
+          mapfile -t changed < <(git diff --name-only --diff-filter=d "${base}" HEAD -- '.github/workflows/*.yml' '.github/workflows/*.yaml')
           if [ "${#changed[@]}" -eq 0 ]; then
             echo "No workflow file changed: nothing to validate."
             exit 0
