@@ -17,6 +17,8 @@ grep -c "^        if: steps.flow.outputs.ready == 'true'$" .github/workflows/aut
 grep -qxF "subject_pattern: repo:a11ign@320310787/\.github@$(gh api repos/a11ign/.github --jq .id):(pull_request|ref:refs/heads/main)" .github/chainguard/auto-arm.sts.yaml
 grep -qxF '  job_workflow_ref: a11ign/\.github/\.github/workflows/auto-arm\.yml@refs/heads/main' .github/chainguard/auto-arm.sts.yaml
 diff <(sed -n '/^repositories:/,$p' .github/chainguard/auto-arm.sts.yaml) <(printf 'repositories:\n  - .github\n')
+# the merge flow's steps behave as written: the guard opens only on a main with the whole flow and fails closed; the validate step checks every workflow a pull request or a queue entry adds or edits, and fails on a diff it cannot take
+bash .github/tests/merge-flow.test.sh
 # gate runs in the merge queue, against the entry's base
 grep -qx '  merge_group:' .github/workflows/gate.yml
 grep -qF 'QUEUE_BASE: ${{ github.event.merge_group.base_sha }}' .github/workflows/gate.yml

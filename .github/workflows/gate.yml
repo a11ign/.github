@@ -13,6 +13,9 @@ name: gate
 # `.github/workflows/` is held to in its own Acceptance. A pull request that touches no workflow file runs the job and passes: the job's
 # first duty is to EXIST and be green, so that a settled head exists.
 #
+# Before that it runs `.github/tests/merge-flow.test.sh` (A11-274), which runs `auto-arm.yml`'s guard and this file's validate step as
+# they are written, against fixtures, so a change that breaks either goes red here.
+#
 # ## Why the filter is inside the job
 #
 # A `paths:` filter on the trigger would skip the whole workflow for a pull request that touches no workflow file, and a skipped
@@ -49,6 +52,10 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: false
+
+      # The merge flow's own steps, run as written: auto-arm's guard and the validate step below (A11-274).
+      - name: The merge flow behaves as it should
+        run: bash .github/tests/merge-flow.test.sh
 
       - name: Validate every workflow file the pull request, or the queue entry, changes
         env:
