@@ -5,8 +5,8 @@
 # early costs nothing and removes "a session has to notice" as a step in a pull request's life (A11-274: this repository had no merge flow,
 # so its pull requests waited for a person as a11ign.github.io#3 did; A11-237 had found the same in announcement-emulator#7 and #8).
 #
-# This is a copy of a11ign/announcement-emulator's `auto-arm.yml` (A11-237), with nothing changed but these comments. That file is a
-# deliberately SMALL copy of a11ign/documents' `auto-arm.yml`, itself a copy of a11ign/a11ign's, not a port. That one runs
+# This is a copy of a11ign/announcement-emulator's `auto-arm.yml` (A11-237), with one step added to each job (see A11-274 below). That file is a
+# deliberately SMALL copy of a11ign/documents' `auto-arm.yml`, itself a copy of a11ign/a11ign's, not a port. a11ign/a11ign's runs
 # `agent-org arm-pr`, which reads `.agent-org/project.json` and `.agent-org/roles/sessions.json` from the checkout it runs in; this repository
 # declares no org project. What the tool decides that matters here is one rule, and it is stated below: a `hold:` label is a hold.
 # This repository has no cross-repo CI leg, so lab's refusal to arm a pull request whose cross-repo check has not run is not copied.
@@ -83,7 +83,27 @@ jobs:
         with:
           scope: ${{ github.repository }}
           identity: auto-arm
+      # A11-274: NOTHING IS ARMED UNTIL `main` HAS THE MERGE FLOW. On a branch with no rule that holds it, `gh pr merge --auto` does not arm:
+      # it merges at once (cli/cli `pr merge` treats a CLEAN or UNSTABLE pull request as immediately mergeable), so this file landing before
+      # `merge-queue-main` is applied would merge every open pull request, unreviewed and with checks failing, a fork's included. So each job
+      # first reads `main`'s rules and acts only when they hold a merge queue, an approving review and the required `gate`.
+      - name: Read whether main has the merge flow -- a merge queue, a required review and the required gate (A11-274)
+        id: flow
+        env:
+          GH_TOKEN: ${{ steps.octo-sts.outputs.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          rules=$(gh api "repos/${GH_REPO}/rules/branches/main")
+          if jq -e '
+              any(.[]; .type == "merge_queue")
+              and any(.[]; .type == "pull_request" and .parameters.required_approving_review_count >= 1)
+              and any(.[]; .type == "required_status_checks" and any(.parameters.required_status_checks[]; .context == "gate"))' <<<"$rules" >/dev/null; then
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::notice::AUTO-ARM: main has no merge flow yet (merge queue, required review and required gate), so nothing is armed: on such a branch an arm is a merge"
+          fi
       - name: Arm every open, non-draft, unheld pull request against main that nothing has armed
+        if: steps.flow.outputs.ready == 'true'
         env:
           GH_TOKEN: ${{ steps.octo-sts.outputs.token }}
           GH_REPO: ${{ github.repository }}
@@ -153,7 +173,27 @@ jobs:
         with:
           scope: ${{ github.repository }}
           identity: auto-arm
+      # A11-274: NOTHING IS ARMED UNTIL `main` HAS THE MERGE FLOW. On a branch with no rule that holds it, `gh pr merge --auto` does not arm:
+      # it merges at once (cli/cli `pr merge` treats a CLEAN or UNSTABLE pull request as immediately mergeable), so this file landing before
+      # `merge-queue-main` is applied would merge every open pull request, unreviewed and with checks failing, a fork's included. So each job
+      # first reads `main`'s rules and acts only when they hold a merge queue, an approving review and the required `gate`.
+      - name: Read whether main has the merge flow -- a merge queue, a required review and the required gate (A11-274)
+        id: flow
+        env:
+          GH_TOKEN: ${{ steps.octo-sts.outputs.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          rules=$(gh api "repos/${GH_REPO}/rules/branches/main")
+          if jq -e '
+              any(.[]; .type == "merge_queue")
+              and any(.[]; .type == "pull_request" and .parameters.required_approving_review_count >= 1)
+              and any(.[]; .type == "required_status_checks" and any(.parameters.required_status_checks[]; .context == "gate"))' <<<"$rules" >/dev/null; then
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::notice::AUTO-ARM: main has no merge flow yet (merge queue, required review and required gate), so nothing is armed: on such a branch an arm is a merge"
+          fi
       - name: Mark an approved draft ready and arm it -- unless held, forked, closed or not against main (#4969)
+        if: steps.flow.outputs.ready == 'true'
         env:
           GH_TOKEN: ${{ steps.octo-sts.outputs.token }}
           GH_REPO: ${{ github.repository }}

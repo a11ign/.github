@@ -56,8 +56,10 @@ jobs:
         run: |
           set -euo pipefail
           base="${QUEUE_BASE:-HEAD^1}"
-          # `d` drops deleted files: there is nothing left to validate.
-          mapfile -t changed < <(git diff --name-only --diff-filter=d "${base}" HEAD -- '.github/workflows/*.yml' '.github/workflows/*.yaml')
+          # `d` drops deleted files: there is nothing left to validate. The diff is taken first and on its own, so that a diff which fails
+          # (a base it cannot reach) fails the job under `set -e`, where a process substitution would hide it as "No workflow file changed".
+          diff_names=$(git diff --name-only --diff-filter=d "${base}" HEAD -- '.github/workflows/*.yml' '.github/workflows/*.yaml')
+          mapfile -t changed < <(printf '%s' "${diff_names}" | sed '/^$/d')
           if [ "${#changed[@]}" -eq 0 ]; then
             echo "No workflow file changed: nothing to validate."
             exit 0
